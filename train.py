@@ -608,10 +608,11 @@ def main():
                 amp_autocast=amp_autocast, loss_scaler=loss_scaler, model_ema=model_ema, mixup_fn=mixup_fn)
 
             wall_clock_train += (time.time() - end)
-            wandb.log({
-                "epoch": epoch,
-                "wall_clock/train": wall_clock_train
-            })
+            if args.local_rank == 0:
+                wandb.log({
+                    "epoch": epoch,
+                    "wall_clock/train": wall_clock_train
+                })
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
                 if args.local_rank == 0:
                     _logger.info("Distributing BatchNorm running means and vars")
@@ -634,12 +635,12 @@ def main():
                 update_summary(
                     epoch, train_metrics, eval_metrics, os.path.join(output_dir, 'summary.csv'),
                     write_header=best_metric is None, log_wandb=args.log_wandb and has_wandb)
-            
-            wall_clock_total += (time.time() - end)
-            wandb.log({
-                "epoch": epoch,
-                "wall_clock/total": wall_clock_total
-            })
+            if args.local_rank == 0:
+                wall_clock_total += (time.time() - end)
+                wandb.log({
+                    "epoch": epoch,
+                    "wall_clock/total": wall_clock_total
+                })
             end = time.time()
             # if saver is not None:
                 # save proper checkpoint with eval metric
