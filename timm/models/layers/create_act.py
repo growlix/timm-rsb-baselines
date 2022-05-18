@@ -116,6 +116,9 @@ def get_act_fn(name: Union[Callable, str] = 'relu'):
         # custom autograd, then fallback
         if name in _ACT_FN_ME:
             return _ACT_FN_ME[name]
+    if is_exportable() and name in ('silu', 'swish'):
+        # FIXME PyTorch SiLU doesn't ONNX export, this is a temp hack
+        return swish
     if not (is_no_jit() or is_exportable()):
         if name in _ACT_FN_JIT:
             return _ACT_FN_JIT[name]
@@ -129,12 +132,14 @@ def get_act_layer(name: Union[Type[nn.Module], str] = 'relu'):
     """
     if not name:
         return None
-    if not isinstance(name, str):
-        # callable, module, etc
+    if isinstance(name, type):
         return name
     if not (is_no_jit() or is_exportable() or is_scriptable()):
         if name in _ACT_LAYER_ME:
             return _ACT_LAYER_ME[name]
+    if is_exportable() and name in ('silu', 'swish'):
+        # FIXME PyTorch SiLU doesn't ONNX export, this is a temp hack
+        return Swish
     if not (is_no_jit() or is_exportable()):
         if name in _ACT_LAYER_JIT:
             return _ACT_LAYER_JIT[name]

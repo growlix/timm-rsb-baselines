@@ -103,22 +103,15 @@ class RepeatAugSampler(Sampler):
         g = torch.Generator()
         g.manual_seed(self.epoch)
         if self.shuffle:
-            indices = torch.randperm(len(self.dataset), generator=g)
+            indices = torch.randperm(len(self.dataset), generator=g).tolist()
         else:
-            indices = torch.arange(start=0, end=len(self.dataset))
+            indices = list(range(len(self.dataset)))
 
         # produce repeats e.g. [0, 0, 0, 1, 1, 1, 2, 2, 2....]
-        if isinstance(self.num_repeats, float) and not self.num_repeats.is_integer():
-            # resample for repeats w/ non-integer ratio
-            repeat_size = math.ceil(self.num_repeats * len(self.dataset))
-            indices = indices[torch.tensor([int(i // self.num_repeats) for i in range(repeat_size)])]
-        else:
-            indices = torch.repeat_interleave(indices, repeats=int(self.num_repeats), dim=0)
-        indices = indices.tolist()  # leaving as tensor thrashes dataloader memory
+        indices = [x for x in indices for _ in range(self.num_repeats)]
         # add extra samples to make it evenly divisible
         padding_size = self.total_size - len(indices)
-        if padding_size > 0:
-            indices += indices[:padding_size]
+        indices += indices[:padding_size]
         assert len(indices) == self.total_size
 
         # subsample per rank

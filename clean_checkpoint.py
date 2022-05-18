@@ -13,14 +13,13 @@ import os
 import hashlib
 import shutil
 from collections import OrderedDict
-from timm.models.helpers import load_state_dict
 
 parser = argparse.ArgumentParser(description='PyTorch Checkpoint Cleaner')
 parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('--output', default='', type=str, metavar='PATH',
                     help='output path')
-parser.add_argument('--no-use-ema', dest='no_use_ema', action='store_true',
+parser.add_argument('--use-ema', dest='use_ema', action='store_true',
                     help='use ema version of weights if present')
 parser.add_argument('--clean-aux-bn', dest='clean_aux_bn', action='store_true',
                     help='remove auxiliary batch norm layers (from SplitBN training) from checkpoint')
@@ -35,23 +34,28 @@ def main():
         print("Error: Output filename ({}) already exists.".format(args.output))
         exit(1)
 
-    clean_checkpoint(args.checkpoint, args.output, not args.no_use_ema, args.clean_aux_bn)
-
-
-def clean_checkpoint(checkpoint, output='', use_ema=True, clean_aux_bn=False):
     # Load an existing checkpoint to CPU, strip everything but the state_dict and re-save
-    if checkpoint and os.path.isfile(checkpoint):
-        print("=> Loading checkpoint '{}'".format(checkpoint))
-        state_dict = load_state_dict(checkpoint, use_ema=use_ema)
-        new_state_dict = {}
+    if args.checkpoint and os.path.isfile(args.checkpoint):
+        print("=> Loading checkpoint '{}'".format(args.checkpoint))
+        checkpoint = torch.load(args.checkpoint, map_location='cpu')
+
+        new_state_dict = OrderedDict()
+        if isinstance(checkpoint, dict):
+            state_dict_key = 'state_dict_ema' if args.use_ema else 'state_dict'
+            if state_dict_key in checkpoint:
+                state_dict = checkpoint[state_dict_key]
+            else:
+                state_dict = checkpoint
+        else:
+            assert False
         for k, v in state_dict.items():
-            if clean_aux_bn and 'aux_bn' in k:
+            if args.clean_aux_bn and 'aux_bn' in k:
                 # If all aux_bn keys are removed, the SplitBN layers will end up as normal and
                 # load with the unmodified model using BatchNorm2d.
                 continue
-            name = k[7:] if k.startswith('module.') else k
+            name = k[7:] if k.startswith('module') else k
             new_state_dict[name] = v
-        print("=> Loaded state_dict from '{}'".format(checkpoint))
+        print("=> Loaded state_dict from '{}'".format(args.checkpoint))
 
         try:
             torch.save(new_state_dict, _TEMP_NAME, _use_new_zipfile_serialization=False)
@@ -61,19 +65,17 @@ def clean_checkpoint(checkpoint, output='', use_ema=True, clean_aux_bn=False):
         with open(_TEMP_NAME, 'rb') as f:
             sha_hash = hashlib.sha256(f.read()).hexdigest()
 
-        if output:
-            checkpoint_root, checkpoint_base = os.path.split(output)
+        if args.output:
+            checkpoint_root, checkpoint_base = os.path.split(args.output)
             checkpoint_base = os.path.splitext(checkpoint_base)[0]
         else:
             checkpoint_root = ''
-            checkpoint_base = os.path.splitext(checkpoint)[0]
+            checkpoint_base = os.path.splitext(args.checkpoint)[0]
         final_filename = '-'.join([checkpoint_base, sha_hash[:8]]) + '.pth'
         shutil.move(_TEMP_NAME, os.path.join(checkpoint_root, final_filename))
         print("=> Saved state_dict to '{}, SHA256: {}'".format(final_filename, sha_hash))
-        return final_filename
     else:
-        print("Error: Checkpoint ({}) doesn't exist".format(checkpoint))
-        return ''
+        print("Error: Checkpoint ({}) doesn't exist".format(args.checkpoint))
 
 
 if __name__ == '__main__':

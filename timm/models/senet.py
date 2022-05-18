@@ -14,7 +14,6 @@ support for extras like dilation, switchable BN/activations, feature extraction,
 import math
 from collections import OrderedDict
 
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -121,7 +120,8 @@ class SEBottleneck(Bottleneck):
     """
     expansion = 4
 
-    def __init__(self, inplanes, planes, groups, reduction, stride=1, downsample=None):
+    def __init__(self, inplanes, planes, groups, reduction, stride=1,
+                 downsample=None):
         super(SEBottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes * 2, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes * 2)
@@ -129,7 +129,8 @@ class SEBottleneck(Bottleneck):
             planes * 2, planes * 4, kernel_size=3, stride=stride,
             padding=1, groups=groups, bias=False)
         self.bn2 = nn.BatchNorm2d(planes * 4)
-        self.conv3 = nn.Conv2d(planes * 4, planes * 4, kernel_size=1, bias=False)
+        self.conv3 = nn.Conv2d(
+            planes * 4, planes * 4, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(planes * 4)
         self.relu = nn.ReLU(inplace=True)
         self.se_module = SEModule(planes * 4, reduction=reduction)
@@ -145,11 +146,14 @@ class SEResNetBottleneck(Bottleneck):
     """
     expansion = 4
 
-    def __init__(self, inplanes, planes, groups, reduction, stride=1, downsample=None):
+    def __init__(self, inplanes, planes, groups, reduction, stride=1,
+                 downsample=None):
         super(SEResNetBottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False, stride=stride)
+        self.conv1 = nn.Conv2d(
+            inplanes, planes, kernel_size=1, bias=False, stride=stride)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, groups=groups, bias=False)
+        self.conv2 = nn.Conv2d(
+            planes, planes, kernel_size=3, padding=1, groups=groups, bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(planes * 4)
@@ -165,12 +169,15 @@ class SEResNeXtBottleneck(Bottleneck):
     """
     expansion = 4
 
-    def __init__(self, inplanes, planes, groups, reduction, stride=1, downsample=None, base_width=4):
+    def __init__(self, inplanes, planes, groups, reduction, stride=1,
+                 downsample=None, base_width=4):
         super(SEResNeXtBottleneck, self).__init__()
         width = math.floor(planes * (base_width / 64)) * groups
-        self.conv1 = nn.Conv2d(inplanes, width, kernel_size=1, bias=False, stride=1)
+        self.conv1 = nn.Conv2d(
+            inplanes, width, kernel_size=1, bias=False, stride=1)
         self.bn1 = nn.BatchNorm2d(width)
-        self.conv2 = nn.Conv2d(width, width, kernel_size=3, stride=stride, padding=1, groups=groups, bias=False)
+        self.conv2 = nn.Conv2d(
+            width, width, kernel_size=3, stride=stride, padding=1, groups=groups, bias=False)
         self.bn2 = nn.BatchNorm2d(width)
         self.conv3 = nn.Conv2d(width, planes * 4, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(planes * 4)
@@ -185,9 +192,11 @@ class SEResNetBlock(nn.Module):
 
     def __init__(self, inplanes, planes, groups, reduction, stride=1, downsample=None):
         super(SEResNetBlock, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=3, padding=1, stride=stride, bias=False)
+        self.conv1 = nn.Conv2d(
+            inplanes, planes, kernel_size=3, padding=1, stride=stride, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, groups=groups, bias=False)
+        self.conv2 = nn.Conv2d(
+            planes, planes, kernel_size=3, padding=1, groups=groups, bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
         self.relu = nn.ReLU(inplace=True)
         self.se_module = SEModule(planes, reduction=reduction)
@@ -216,10 +225,9 @@ class SEResNetBlock(nn.Module):
 
 class SENet(nn.Module):
 
-    def __init__(
-            self, block, layers, groups, reduction, drop_rate=0.2,
-            in_chans=3, inplanes=64, input_3x3=False, downsample_kernel_size=1,
-            downsample_padding=0, num_classes=1000, global_pool='avg'):
+    def __init__(self, block, layers, groups, reduction, drop_rate=0.2,
+                 in_chans=3, inplanes=64, input_3x3=False, downsample_kernel_size=1,
+                 downsample_padding=0, num_classes=1000, global_pool='avg'):
         """
         Parameters
         ----------
@@ -358,16 +366,6 @@ class SENet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    @torch.jit.ignore
-    def group_matcher(self, coarse=False):
-        matcher = dict(stem=r'^layer0', blocks=r'^layer(\d+)' if coarse else r'^layer(\d+)\.(\d+)')
-        return matcher
-
-    @torch.jit.ignore
-    def set_grad_checkpointing(self, enable=True):
-        assert not enable, 'gradient checkpointing not supported'
-
-    @torch.jit.ignore
     def get_classifier(self):
         return self.last_linear
 
@@ -385,20 +383,24 @@ class SENet(nn.Module):
         x = self.layer4(x)
         return x
 
-    def forward_head(self, x, pre_logits: bool = False):
+    def logits(self, x):
         x = self.global_pool(x)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
-        return x if pre_logits else self.last_linear(x)
+        x = self.last_linear(x)
+        return x
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.forward_head(x)
+        x = self.logits(x)
         return x
 
 
 def _create_senet(variant, pretrained=False, **kwargs):
-    return build_model_with_cfg(SENet, variant, pretrained, **kwargs)
+    return build_model_with_cfg(
+        SENet, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        **kwargs)
 
 
 @register_model
