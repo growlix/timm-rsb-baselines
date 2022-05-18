@@ -740,7 +740,7 @@ def train_one_epoch(
                 
                 wandb.log({
                     "throughput": input.size(0) * args.world_size / batch_time_m.val,
-                    "step": num_updates
+                    "Step": num_updates
                 }
                 )
 
